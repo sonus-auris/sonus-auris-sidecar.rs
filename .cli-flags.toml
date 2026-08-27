@@ -1,0 +1,18 @@
+# flags-2-env surface for `sonus-auris-sidecar`
+[identity]
+service = "sonus-auris-sidecar"
+type_name = "SidecarEnv"
+
+[help]
+url = "https://github.com/sonus-auris/sonus-auris-sidecar.rs"
+columns = ["options", "env", "type", "default", "description"]
+
+[parse]
+allow_unknown = false
+
+[flags.bind]
+env = "SONUS_AURIS_SIDECAR_BIND"
+long = "bind"
+type = "string"
+default = "127.0.0.1:9090"
+help = "HTTP listen address for /healthz /readyz /metrics."
