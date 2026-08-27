@@ -1,0 +1,19 @@
+[package]
+name = "sonus-auris-sidecar"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "k8s sidecar for Sonus Auris."
+repository = "https://github.com/sonus-auris/sonus-auris-sidecar.rs"
+readme = "README.md"
+
+[[bin]]
+name = "sonus-auris-sidecar"
+path = "src/main.rs"
+
+[dependencies]
+ores-otel-sidecar = { git = "https://github.com/ores-otel/ores-otel-sidecar.rs", rev = "dc67460d3fb033a82222d3639aeb03963c434e7a" }
+
+
+[lints.rust]
+unsafe_code = "forbid"
