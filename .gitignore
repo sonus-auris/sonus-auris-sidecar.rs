@@ -3,3 +3,7 @@
 .env
 .env.*
 !.env.example
+
+# Local temporary directories and Git worktrees (DEN-3956).
+tmp/
+temp/
