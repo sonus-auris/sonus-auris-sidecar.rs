@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Distroless image for sonus-auris-sidecar.
+# Distroless production image for sonus-auris-sidecar.
 # Prefer linux/arm64:
 #   docker buildx build --platform linux/arm64 -t sonus-auris-sidecar:dev .
 #
@@ -9,8 +9,11 @@
 # app. The app exports OTLP in-process to
 # dd-otel-collector.observability.svc.cluster.local:4318 (HTTP) or :4317 (gRPC).
 #
-# No ores-sops in this image: secrets stay on the app container
-# (env/enc + sops-entrypoint) or a k8s Secret. Distroless has no shell.
+# No ores-sops in the production target: secrets stay on the app container
+# (env/enc + sops-entrypoint) or a k8s Secret. Distroless has no shell, so the
+# hardened default remains a direct binary entrypoint. The optional
+# shell-runtime target exists to test the version-controlled wrapper contract
+# without weakening the production image.
 #
 # k8s contract (see ores-otel/ores-otel-sidecar.rs/k8s/container.yaml):
 #   - bind SONUS_AURIS_SIDECAR_BIND=127.0.0.1:9090 (loopback only)
@@ -30,7 +33,25 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry,sharin
     && strip "target/release/sonus-auris-sidecar" \
     && cp "target/release/sonus-auris-sidecar" "/usr/local/bin/sonus-auris-sidecar"
 
-FROM gcr.io/distroless/cc-debian12:nonroot
+# Shell-capable conformance target. It is intentionally not the final/default
+# target; production remains distroless below.
+FROM debian:bookworm-slim AS shell-runtime
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && apt-get clean \
+    && find /var/lib/apt/lists -mindepth 1 -delete \
+    && groupadd --system --gid 65532 nonroot \
+    && useradd --system --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin nonroot
+COPY --from=build --chown=65532:65532 "/usr/local/bin/sonus-auris-sidecar" "/sonus-auris-sidecar"
+COPY --chmod=0555 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENV SONUS_AURIS_SIDECAR_BIND=127.0.0.1:9090 \
+    ORES_OTEL_SIDECAR_BIND=127.0.0.1:9090 \
+    OTEL_SERVICE_NAME=sonus-auris-sidecar
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/sonus-auris-sidecar"]
+
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 # Binary lives at /<bin> so kubelet exec ["/sonus-auris-sidecar", "probe"] matches the
 # ores-otel sidecar contract (no curl, no /usr/local/bin prefix required).
 COPY --from=build --chown=65532:65532 "/usr/local/bin/sonus-auris-sidecar" "/sonus-auris-sidecar"
