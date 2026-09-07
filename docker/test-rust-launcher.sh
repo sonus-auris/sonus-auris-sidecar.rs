@@ -45,16 +45,34 @@ jq -R -s -e '
 sudo cat "/proc/$pid/comm" | grep -qx 'sonus-auris-sid'
 sudo awk '/^Uid:/{exit !($2 == 65532 && $3 == 65532)}' "/proc/$pid/status"
 sudo awk '/^Gid:/{exit !($2 == 65532 && $3 == 65532)}' "/proc/$pid/status"
+# A logging-only assertion cannot prove that exec received the original argv.
+# Compare the actual application's NUL-separated bytes, including the empty arg.
+printf '%s\0' /sonus-auris-sidecar 'two words' '' '*' >"$work/expected-argv"
+sudo cat "/proc/$pid/cmdline" | cmp - "$work/expected-argv"
+sudo cat "/proc/$pid/status" | grep -Eq '^NoNewPrivs:[[:space:]]+1$'
+sudo cat "/proc/$pid/status" | grep -Eq '^CapEff:[[:space:]]+0+$'
 
-if docker run --rm "${flags[@]}" --entrypoint /bin/sh "$image" -c ':' >"$work/shell-out" 2>"$work/shell-err"; then
-  printf '%s\n' 'unexpected shell in distroless image' >&2
-  exit 1
-fi
+for shell in /bin/sh /bin/bash; do
+  if docker run --rm "${flags[@]}" --entrypoint "$shell" "$image" -c ':' >"$work/shell-out" 2>"$work/shell-err"; then
+    printf 'unexpected shell in distroless image: %s\n' "$shell" >&2
+    exit 1
+  fi
+  # Do not mistake a daemon/network/permission failure for proof of no shell.
+  grep -Eq 'no such file|executable file not found' "$work/shell-err"
+done
 set +e
 docker run --rm "${flags[@]}" --entrypoint /ores-launcher "$image" >"$work/missing-out" 2>"$work/missing-err"
 status=$?
 set -e
 test "$status" -eq 64
-jq -e '.fields["event.name"] == "process.exec.invalid_command"' "$work/missing-err"
-printf '%s\n' 'PASS: shared launcher, literal argv record, app PID 1, nonroot, HTTP startup, no shell'
+jq -e '.schema == "next-loggers/v1" and .fields["event.name"] == "process.exec.invalid_command"' "$work/missing-err"
+test ! -s "$work/missing-out"
+set +e
+docker run --rm "${flags[@]}" --entrypoint /ores-launcher "$image" /__ores_missing_command__ >"$work/exec-out" 2>"$work/exec-err"
+status=$?
+set -e
+test "$status" -eq 127
+jq -s -e '[.[] | select(.schema == "next-loggers/v1" and .fields["event.name"] == "process.exec.attempt")] | length == 1' "$work/exec-err"
+test ! -s "$work/exec-out"
+printf '%s\n' 'PASS: ores-otel record, actual native argv bytes, app PID 1, nonroot, no-new-privileges, no capabilities, HTTP startup, no sh/bash, exits 64/127'
 printf '%s\n' 'Kubelet probe command behavior is not certified here; see issue #7.'
