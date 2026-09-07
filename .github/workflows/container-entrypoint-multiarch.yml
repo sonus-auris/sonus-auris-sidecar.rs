@@ -1,0 +1,75 @@
+name: Container entrypoint and multi-arch
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-entrypoint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  entrypoint-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify POSIX wrapper and exit propagation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n docker/entrypoint.sh
+          test "$(sh docker/entrypoint.sh sh -c 'printf ok')" = "ok"
+          set +e
+          sh docker/entrypoint.sh sh -c 'exit 23'
+          status=$?
+          set -e
+          test "$status" -eq 23
+
+  docker-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build hardened default with docker build
+        run: docker build --progress=plain --tag sonus-auris-sidecar:runtime-ci .
+      - name: Build wrapper target with docker build
+        run: docker build --progress=plain --target shell-runtime --tag sonus-auris-sidecar:shell-ci .
+      - name: Verify image execution metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect sonus-auris-sidecar:runtime-ci --format '{{json .Config.Entrypoint}}')" = '["/sonus-auris-sidecar"]'
+          test "$(docker image inspect sonus-auris-sidecar:shell-ci --format '{{json .Config.Entrypoint}}')" = '["/usr/local/bin/entrypoint.sh"]'
+          test "$(docker image inspect sonus-auris-sidecar:shell-ci --format '{{json .Config.Cmd}}')" = '["/sonus-auris-sidecar"]'
+
+  buildx-multiarch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Build hardened default for amd64 and arm64
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --target runtime \
+            --progress=plain \
+            --output type=oci,dest=/tmp/sonus-auris-sidecar-runtime.oci.tar \
+            .
+          test -s /tmp/sonus-auris-sidecar-runtime.oci.tar
+      - name: Build wrapper target for amd64 and arm64
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --target shell-runtime \
+            --progress=plain \
+            --output type=oci,dest=/tmp/sonus-auris-sidecar-shell.oci.tar \
+            .
+          test -s /tmp/sonus-auris-sidecar-shell.oci.tar
