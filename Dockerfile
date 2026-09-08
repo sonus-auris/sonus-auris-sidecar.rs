@@ -18,7 +18,6 @@
 # k8s contract (see ores-otel/ores-otel-sidecar.rs/k8s/container.yaml):
 #   - bind SONUS_AURIS_SIDECAR_BIND=127.0.0.1:9090 (loopback only)
 #   - livenessProbe exec ["/sonus-auris-sidecar", "probe"]
-#     NOTE: existing probe argv/runtime mismatch is tracked in issue #7.
 #   - no readinessProbe
 #   - do not publish :9090 on a Service
 #   - do not EXPOSE 4317/4318
@@ -60,7 +59,9 @@ RUN apt-get update \
     && find /var/lib/apt/lists -mindepth 1 -delete \
     && groupadd --system --gid 65532 nonroot \
     && useradd --system --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin nonroot
+WORKDIR /
 COPY --from=build --chown=65532:65532 "/usr/local/bin/sonus-auris-sidecar" "/sonus-auris-sidecar"
+COPY --from=build --chown=65532:65532 --chmod=0444 "/src/.cli-flags.toml" "/.cli-flags.toml"
 COPY --chmod=0555 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 ENV SONUS_AURIS_SIDECAR_BIND=127.0.0.1:9090 \
     ORES_OTEL_SIDECAR_BIND=127.0.0.1:9090 \
@@ -70,8 +71,12 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/sonus-auris-sidecar"]
 
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
+WORKDIR /
 # Keep the app's absolute path stable for direct invocations and kubelet probes.
+# The flags-2-env schema is immutable runtime input; no shell, curl, package
+# manager, or writable root filesystem is required.
 COPY --from=build --chown=65532:65532 "/usr/local/bin/sonus-auris-sidecar" "/sonus-auris-sidecar"
+COPY --from=build --chown=65532:65532 --chmod=0444 "/src/.cli-flags.toml" "/.cli-flags.toml"
 COPY --from=launcher-build --chmod=0555 /launcher/bin/ores-launcher /ores-launcher
 ENV SONUS_AURIS_SIDECAR_BIND=127.0.0.1:9090 \
     ORES_OTEL_SIDECAR_BIND=127.0.0.1:9090 \

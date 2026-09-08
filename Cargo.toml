@@ -12,8 +12,7 @@ name = "sonus-auris-sidecar"
 path = "src/main.rs"
 
 [dependencies]
-ores-otel-sidecar = { git = "https://github.com/ores-otel/ores-otel-sidecar.rs", rev = "fed785ad9a638e24d458e0f2acd390624e4e748d" }
-
+ores-otel-sidecar = { git = "https://github.com/ores-otel/ores-otel-sidecar.rs", rev = "e20f4f5802b3257a4521fc4192456cdca18a9630" }
 
 [lints.rust]
 unsafe_code = "forbid"

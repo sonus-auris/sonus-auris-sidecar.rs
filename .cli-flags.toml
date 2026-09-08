@@ -7,8 +7,12 @@ type_name = "SidecarEnv"
 url = "https://github.com/sonus-auris/sonus-auris-sidecar.rs"
 columns = ["options", "env", "type", "default", "description"]
 
+[env]
+load = false
+
 [parse]
 allow_unknown = false
+command_env = "SONUS_AURIS_SIDECAR_COMMAND"
 
 [flags.bind]
 env = "SONUS_AURIS_SIDECAR_BIND"
@@ -16,3 +20,12 @@ long = "bind"
 type = "string"
 default = "127.0.0.1:9090"
 help = "HTTP listen address for /healthz /readyz /metrics."
+
+[commands.probe]
+aliases = ["probe-healthz"]
+env = "SONUS_AURIS_SIDECAR_COMMAND_PROBE"
+help = "Run one bounded loopback GET against /healthz and exit."
+
+[commands.probe-readyz]
+env = "SONUS_AURIS_SIDECAR_COMMAND_PROBE_READYZ"
+help = "Run one bounded loopback GET against /readyz and exit."

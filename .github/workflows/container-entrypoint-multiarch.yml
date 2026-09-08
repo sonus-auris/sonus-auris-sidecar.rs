@@ -1,4 +1,4 @@
-name: Container entrypoint and multi-arch
+name: Container entrypoint, probe, and multi-arch
 
 on:
   pull_request:
@@ -30,11 +30,12 @@ jobs:
           status=$?
           set -e
           test "$status" -eq 23
-      - name: Validate the immutable launcher pin and smoke script
+      - name: Validate immutable pins and smoke scripts
         run: |
           set -euo pipefail
           grep -Eq '^[0-9a-f]{40}$' docker/ores-launcher.rev
           test "$(wc -l < docker/ores-launcher.rev)" -eq 1
+          grep -F 'rev = "e20f4f5802b3257a4521fc4192456cdca18a9630"' Cargo.toml
           bash -n docker/test-rust-launcher.sh
 
   docker-build:
@@ -55,10 +56,43 @@ jobs:
         run: |
           set -euo pipefail
           test "$(docker image inspect sonus-auris-sidecar:runtime-ci --format '{{json .Config.Entrypoint}}')" = '["/ores-launcher","/sonus-auris-sidecar"]'
+          test "$(docker image inspect sonus-auris-sidecar:runtime-ci --format '{{json .Config.WorkingDir}}')" = '"/"'
           test "$(docker image inspect sonus-auris-sidecar:shell-ci --format '{{json .Config.Entrypoint}}')" = '["/usr/local/bin/entrypoint.sh"]'
           test "$(docker image inspect sonus-auris-sidecar:shell-ci --format '{{json .Config.Cmd}}')" = '["/sonus-auris-sidecar"]'
       - name: Verify real distroless startup and ores-otel command logging
         run: bash docker/test-rust-launcher.sh sonus-auris-sidecar:runtime-ci
+      - name: Verify kubelet-style exec probes without a shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach \
+            --name sonus-auris-sidecar-probe \
+            --read-only \
+            --security-opt=no-new-privileges \
+            sonus-auris-sidecar:runtime-ci
+          trap 'docker rm --force sonus-auris-sidecar-probe >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for _ in $(seq 1 50); do
+            if docker exec sonus-auris-sidecar-probe \
+              /sonus-auris-sidecar probe; then
+              ready=1
+              break
+            fi
+            sleep 0.1
+          done
+          test "$ready" -eq 1
+
+          docker exec sonus-auris-sidecar-probe \
+            /sonus-auris-sidecar probe-healthz
+          docker exec sonus-auris-sidecar-probe \
+            /sonus-auris-sidecar probe-readyz
+
+          if docker exec sonus-auris-sidecar-probe \
+            /sonus-auris-sidecar --definitely-not-declared; then
+            echo "unknown arguments must fail closed" >&2
+            exit 1
+          fi
 
   buildx-multiarch:
     runs-on: ubuntu-24.04
