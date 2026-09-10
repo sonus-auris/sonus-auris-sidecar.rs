@@ -98,7 +98,10 @@ fn unhealthy_refused_and_timed_out_probes_fail_closed() {
     assert!(refused.stdout.is_empty());
 
     let timeout_listener = TcpListener::bind("127.0.0.1:0").expect("bind timeout fixture");
-    let timeout_port = timeout_listener.local_addr().expect("timeout address").port();
+    let timeout_port = timeout_listener
+        .local_addr()
+        .expect("timeout address")
+        .port();
     let timeout = thread::spawn(move || {
         let (mut stream, _) = timeout_listener.accept().expect("accept timeout probe");
         let mut request = [0_u8; 1024];
