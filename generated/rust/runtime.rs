@@ -141,10 +141,10 @@ fn parse_dotenv(text: &str) -> std::collections::BTreeMap<String, String> {
 }
 
 fn dotenv_enabled() -> bool {
-    match std::env::var("FLAGS2ENV_DOTENV") {
-        Ok(value) if matches!(value.trim(), "0" | "false" | "FALSE" | "no" | "NO") => false,
-        _ => true,
-    }
+    !matches!(
+        std::env::var("FLAGS2ENV_DOTENV"),
+        Ok(value) if matches!(value.trim(), "0" | "false" | "FALSE" | "no" | "NO")
+    )
 }
 
 fn load_dotenv_files(files: &[&str]) -> std::collections::BTreeMap<String, String> {
