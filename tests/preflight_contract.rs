@@ -52,8 +52,14 @@ fn preflight_rejects_unknown_argv_without_reflecting_values() {
     let argument = format!("--definitely-not-declared={secret}");
     let output = run(&["preflight", &argument], None);
 
-    assert!(!output.status.success(), "unknown option unexpectedly passed");
-    assert!(output.stdout.is_empty(), "invalid invocation wrote to stdout");
+    assert!(
+        !output.status.success(),
+        "unknown option unexpectedly passed"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "invalid invocation wrote to stdout"
+    );
     assert!(
         !String::from_utf8_lossy(&output.stderr).contains(secret),
         "rejected argv value leaked into stderr"
