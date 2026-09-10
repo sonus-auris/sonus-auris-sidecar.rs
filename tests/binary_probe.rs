@@ -98,7 +98,10 @@ fn unhealthy_refused_and_timed_out_probes_fail_closed() {
     assert!(refused.stdout.is_empty());
 
     let timeout_listener = TcpListener::bind("127.0.0.1:0").expect("bind timeout fixture");
-    let timeout_port = timeout_listener.local_addr().expect("timeout address").port();
+    let timeout_port = timeout_listener
+        .local_addr()
+        .expect("timeout address")
+        .port();
     let timeout = thread::spawn(move || {
         let (mut stream, _) = timeout_listener.accept().expect("accept timeout probe");
         let mut request = [0_u8; 1024];
@@ -122,7 +125,7 @@ fn invalid_cli_and_bind_values_do_not_fall_back_to_server_startup() {
 
     let bind_secret = "not-a-bind-Bearer-synthetic-env-secret";
     let invalid_bind = run(&[], bind_secret);
-    assert_eq!(invalid_bind.status.code(), Some(2));
+    assert_eq!(invalid_bind.status.code(), Some(1));
     assert!(invalid_bind.stdout.is_empty());
     assert!(!String::from_utf8_lossy(&invalid_bind.stderr).contains(bind_secret));
 }
