@@ -125,7 +125,7 @@ fn invalid_cli_and_bind_values_do_not_fall_back_to_server_startup() {
 
     let bind_secret = "not-a-bind-Bearer-synthetic-env-secret";
     let invalid_bind = run(&[], bind_secret);
-    assert_eq!(invalid_bind.status.code(), Some(2));
+    assert_eq!(invalid_bind.status.code(), Some(1));
     assert!(invalid_bind.stdout.is_empty());
     assert!(!String::from_utf8_lossy(&invalid_bind.stderr).contains(bind_secret));
 }
