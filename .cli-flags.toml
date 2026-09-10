@@ -8,7 +8,7 @@ url = "https://github.com/sonus-auris/sonus-auris-sidecar.rs"
 columns = ["options", "env", "type", "default", "description"]
 
 [env]
-load = false
+files = []
 
 [parse]
 allow_unknown = false
