@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Verify POSIX wrapper and exit propagation
         shell: bash
         run: |
@@ -37,6 +40,7 @@ jobs:
           test "$(wc -l < docker/ores-launcher.rev)" -eq 1
           grep -F 'rev = "e20f4f5802b3257a4521fc4192456cdca18a9630"' Cargo.toml
           bash -n docker/test-rust-launcher.sh
+          bash -n docker/test-launcher-adversarial.sh
 
   docker-build:
     strategy:
@@ -47,6 +51,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Build hardened default with docker build
         run: docker build --progress=plain --tag sonus-auris-sidecar:runtime-ci .
       - name: Build wrapper target with docker build
@@ -61,6 +68,8 @@ jobs:
           test "$(docker image inspect sonus-auris-sidecar:shell-ci --format '{{json .Config.Cmd}}')" = '["/sonus-auris-sidecar"]'
       - name: Verify real distroless startup and ores-otel command logging
         run: bash docker/test-rust-launcher.sh sonus-auris-sidecar:runtime-ci
+      - name: Verify adversarial launcher behavior in the actual consumer image
+        run: bash docker/test-launcher-adversarial.sh sonus-auris-sidecar:runtime-ci
       - name: Verify kubelet-style exec probes without a shell
         shell: bash
         run: |
@@ -99,6 +108,9 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Build hardened default for amd64 and arm64
