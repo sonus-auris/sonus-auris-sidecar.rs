@@ -160,7 +160,10 @@ fn preflight_resolves_argv_before_env_and_redacts_rejected_values() {
     assert!(!String::from_utf8_lossy(&invalid.stderr).contains(rejected));
 
     let occupied = TcpListener::bind("127.0.0.1:0").expect("hold override listener");
-    let override_flag = format!("--bind={}", occupied.local_addr().expect("override address"));
+    let override_flag = format!(
+        "--bind={}",
+        occupied.local_addr().expect("override address")
+    );
     assert_quiet_success(&run(&["preflight", &override_flag], rejected));
     let unknown = format!("--unknown-option={rejected}");
     let invalid = run(&["preflight", &unknown], "127.0.0.1:9090");
