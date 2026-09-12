@@ -12,7 +12,5 @@ pub struct SidecarEnv {
 }
 
 impl SidecarEnv {
-    pub const KEYS: Self = Self {
-        bind: BIND,
-    };
+    pub const KEYS: Self = Self { bind: BIND };
 }
