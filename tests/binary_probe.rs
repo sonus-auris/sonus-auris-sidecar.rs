@@ -16,15 +16,27 @@ fn reserve_loopback_port() -> u16 {
 }
 
 fn run(args: &[&str], bind: &str) -> Output {
-    Command::new(binary())
+    let mut child = Command::new(binary())
         .args(args)
         .env("SONUS_AURIS_SIDECAR_BIND", bind)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .output()
-        .expect("run Sonus sidecar command")
+        .spawn()
+        .expect("run Sonus sidecar command");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if child.try_wait().expect("poll sidecar command").is_some() {
+            return child.wait_with_output().expect("collect sidecar output");
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("sidecar command exceeded its bounded execution deadline");
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn start_sidecar(port: u16) -> Child {
@@ -98,7 +110,10 @@ fn unhealthy_refused_and_timed_out_probes_fail_closed() {
     assert!(refused.stdout.is_empty());
 
     let timeout_listener = TcpListener::bind("127.0.0.1:0").expect("bind timeout fixture");
-    let timeout_port = timeout_listener.local_addr().expect("timeout address").port();
+    let timeout_port = timeout_listener
+        .local_addr()
+        .expect("timeout address")
+        .port();
     let timeout = thread::spawn(move || {
         let (mut stream, _) = timeout_listener.accept().expect("accept timeout probe");
         let mut request = [0_u8; 1024];
@@ -122,7 +137,36 @@ fn invalid_cli_and_bind_values_do_not_fall_back_to_server_startup() {
 
     let bind_secret = "not-a-bind-Bearer-synthetic-env-secret";
     let invalid_bind = run(&[], bind_secret);
-    assert_eq!(invalid_bind.status.code(), Some(2));
+    assert_eq!(invalid_bind.status.code(), Some(1));
     assert!(invalid_bind.stdout.is_empty());
     assert!(!String::from_utf8_lossy(&invalid_bind.stderr).contains(bind_secret));
+}
+
+#[test]
+fn preflight_exits_without_binding_an_occupied_listener() {
+    let occupied = TcpListener::bind("127.0.0.1:0").expect("hold occupied listener");
+    let bind = occupied.local_addr().expect("occupied address").to_string();
+    let output = run(&["preflight"], &bind);
+    assert_quiet_success(&output);
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn preflight_resolves_argv_before_env_and_redacts_rejected_values() {
+    let rejected = "not-a-bind-synthetic-sensitive-value";
+    let invalid = run(&["preflight"], rejected);
+    assert_eq!(invalid.status.code(), Some(1));
+    assert!(invalid.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&invalid.stderr).contains(rejected));
+
+    let occupied = TcpListener::bind("127.0.0.1:0").expect("hold override listener");
+    let override_flag = format!(
+        "--bind={}",
+        occupied.local_addr().expect("override address")
+    );
+    assert_quiet_success(&run(&["preflight", &override_flag], rejected));
+    let unknown = format!("--unknown-option={rejected}");
+    let invalid = run(&["preflight", &unknown], "127.0.0.1:9090");
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(!String::from_utf8_lossy(&invalid.stderr).contains(rejected));
 }
