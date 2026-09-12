@@ -8,7 +8,7 @@ url = "https://github.com/sonus-auris/sonus-auris-sidecar.rs"
 columns = ["options", "env", "type", "default", "description"]
 
 [env]
-load = false
+files = []
 
 [parse]
 allow_unknown = false
@@ -20,6 +20,10 @@ long = "bind"
 type = "string"
 default = "127.0.0.1:9090"
 help = "HTTP listen address for /healthz /readyz /metrics."
+
+[commands.preflight]
+env = "SONUS_AURIS_SIDECAR_COMMAND_PREFLIGHT"
+help = "Validate the flags-2-env startup contract without opening a listener."
 
 [commands.probe]
 aliases = ["probe-healthz"]
