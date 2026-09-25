@@ -5,11 +5,7 @@ enum Region {
     Unknown,
 }
 
-const REGIONS: [Region; 3] = [
-    Region::AppStorage,
-    Region::SharedExternal,
-    Region::Unknown,
-];
+const REGIONS: [Region; 3] = [Region::AppStorage, Region::SharedExternal, Region::Unknown];
 
 fn delete_allowed(region: Region, delete_requested: bool, owned: bool) -> bool {
     if !delete_requested {
@@ -19,11 +15,7 @@ fn delete_allowed(region: Region, delete_requested: bool, owned: bool) -> bool {
     return region == Region::AppStorage && owned;
 }
 
-fn validate_state(
-    region: Region,
-    delete_requested: bool,
-    owned: bool,
-) -> Result<(), &'static str> {
+fn validate_state(region: Region, delete_requested: bool, owned: bool) -> Result<(), &'static str> {
     let allowed = delete_allowed(region, delete_requested, owned);
 
     if delete_requested && allowed && region != Region::AppStorage {
@@ -87,11 +79,7 @@ mod tests {
 
     #[test]
     fn non_delete_operations_remain_admissible() {
-        for region in [
-            Region::AppStorage,
-            Region::SharedExternal,
-            Region::Unknown,
-        ] {
+        for region in [Region::AppStorage, Region::SharedExternal, Region::Unknown] {
             assert!(delete_allowed(region, false, false));
             assert!(delete_allowed(region, false, true));
         }
