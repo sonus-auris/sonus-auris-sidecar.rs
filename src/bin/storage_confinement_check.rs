@@ -1,3 +1,5 @@
+#![allow(clippy::needless_return)]
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Region {
     AppStorage,
