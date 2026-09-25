@@ -1,0 +1,28 @@
+{
+  "schema": "sonus-auris.formal-refinement/v1",
+  "repository": "sonus-auris/sonus-auris-sidecar.rs",
+  "formalRepository": "sonus-auris/sonus-auris-formal",
+  "formalCommit": "84db1c2dee8c0e40ed6511189728f47626542a9e",
+  "modelId": "sidecar-lifecycle-v1",
+  "spec": "formal/operational/sidecar_lifecycle.qnt",
+  "module": "sidecar_lifecycle",
+  "invariant": "safety",
+  "witnesses": [
+    "degraded_telemetry_still_serves",
+    "stopped_reachable"
+  ],
+  "implementationPaths": [
+    "src/main.rs",
+    "tests/preflight_contract.rs",
+    "tests/binary_probe.rs"
+  ],
+  "admission": {
+    "exactHeadRequired": true,
+    "exactFormalCommitRequired": true,
+    "missingCredentialIsFailure": true,
+    "zeroStepRunIsNotEvidence": true,
+    "vendoredSpecMustMatchPinnedBlob": true
+  },
+  "formalBlobSha": "c831a0385f6ad1a266eb04487237fefd48833d81",
+  "vendoredSpec": "formal/vendor/sidecar_lifecycle.qnt"
+}
