@@ -1,0 +1,129 @@
+name: Formal refinement
+
+on:
+  pull_request:
+    paths:
+      - 'formal/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'conformance/**'
+      - 'scripts/**'
+      - 'projects/**'
+      - 'schemas/**'
+      - 'infra-isolation/**'
+      - '.github/workflows/formal-refinement.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'formal/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'conformance/**'
+      - 'scripts/**'
+      - 'projects/**'
+      - 'schemas/**'
+      - 'infra-isolation/**'
+      - '.github/workflows/formal-refinement.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: formal-refinement-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  refine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      FLEET_GITHUB_READ_TOKEN: ${{ secrets.FLEET_GITHUB_READ_TOKEN }}
+
+    steps:
+      - name: Check out exact consumer head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          persist-credentials: false
+
+      - name: Validate refinement manifest and implementation paths
+        id: refinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(jq -r '.schema' formal/refinement.json)" = 'sonus-auris.formal-refinement/v1'
+          test "$(jq -r '.repository' formal/refinement.json)" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.formalRepository' formal/refinement.json)" = 'sonus-auris/sonus-auris-formal'
+          test "$(jq -r '.formalCommit' formal/refinement.json)" = '84db1c2dee8c0e40ed6511189728f47626542a9e'
+          jq -e '.admission.exactHeadRequired and .admission.exactFormalCommitRequired and .admission.missingCredentialIsFailure and .admission.zeroStepRunIsNotEvidence' formal/refinement.json >/dev/null
+          while IFS= read -r path; do
+            test -e "$path" || { echo "::error::missing refinement path $path"; exit 1; }
+          done < <(jq -r '.implementationPaths[]' formal/refinement.json)
+          {
+            echo "formal_commit=$(jq -r '.formalCommit' formal/refinement.json)"
+            echo "spec=$(jq -r '.spec' formal/refinement.json)"
+            echo "module=$(jq -r '.module' formal/refinement.json)"
+            echo "invariant=$(jq -r '.invariant' formal/refinement.json)"
+            echo "model_id=$(jq -r '.modelId' formal/refinement.json)"
+            echo "witnesses=$(jq -r '.witnesses | join(" ")' formal/refinement.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Require private formal-source credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FLEET_GITHUB_READ_TOKEN" || {
+            echo '::error::FLEET_GITHUB_READ_TOKEN is required for exact formal refinement.'
+            exit 2
+          }
+
+      - name: Check out exact central formal revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: sonus-auris/sonus-auris-formal
+          ref: ${{ steps.refinement.outputs.formal_commit }}
+          token: ${{ env.FLEET_GITHUB_READ_TOKEN }}
+          path: tmp/sonus-formal
+          persist-credentials: false
+
+      - name: Verify registry binding
+        shell: bash
+        env:
+          MODEL_ID: ${{ steps.refinement.outputs.model_id }}
+        run: |
+          set -euo pipefail
+          test "$(git -C tmp/sonus-formal rev-parse HEAD)" = "${{ steps.refinement.outputs.formal_commit }}"
+          jq -e --arg id "$MODEL_ID" --arg repo "$GITHUB_REPOSITORY" '
+            .models[] | select(.id == $id and .consumer == $repo)
+          ' tmp/sonus-formal/formal/operational/registry.json >/dev/null
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.16.0'
+
+      - name: Set up Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Typecheck pinned model
+        working-directory: tmp/sonus-formal
+        run: npx --yes --package='@informalsystems/quint@0.32.0' quint typecheck "${{ steps.refinement.outputs.spec }}"
+
+      - name: Simulate invariant and witnesses
+        working-directory: tmp/sonus-formal
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r -a witnesses <<< "${{ steps.refinement.outputs.witnesses }}"
+          npx --yes --package='@informalsystems/quint@0.32.0' quint run "${{ steps.refinement.outputs.spec }}"             --main="${{ steps.refinement.outputs.module }}"             --max-samples=2000             --max-steps=16             --invariant="${{ steps.refinement.outputs.invariant }}"             --witnesses "${witnesses[@]}"
+
+      - name: Verify invariant
+        working-directory: tmp/sonus-formal
+        run: |
+          npx --yes --package='@informalsystems/quint@0.32.0' quint verify "${{ steps.refinement.outputs.spec }}"             --main="${{ steps.refinement.outputs.module }}"             --max-steps=16             --invariant="${{ steps.refinement.outputs.invariant }}"
