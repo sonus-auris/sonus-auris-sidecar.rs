@@ -20,6 +20,9 @@
     "exactHeadRequired": true,
     "exactFormalCommitRequired": true,
     "missingCredentialIsFailure": true,
-    "zeroStepRunIsNotEvidence": true
-  }
+    "zeroStepRunIsNotEvidence": true,
+    "vendoredSpecMustMatchPinnedBlob": true
+  },
+  "formalBlobSha": "c831a0385f6ad1a266eb04487237fefd48833d81",
+  "vendoredSpec": "formal/vendor/sidecar_lifecycle.qnt"
 }
