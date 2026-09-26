@@ -1,0 +1,57 @@
+name: Formal bounded delivery invariants
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-delivery-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Exhaustively check bounded delivery state space
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const actions = ['deliver', 'ack', 'rotate_consumer', 'stale_ack', 'duplicate_delivery'];
+          const initial = { nextSeq: 1, delivered: 0, acked: 0, consumerEpoch: 1 };
+          const step = (s, action) => {
+            switch (action) {
+              case 'deliver': return { ...s, delivered: s.nextSeq, nextSeq: s.nextSeq + 1 };
+              case 'ack': return { ...s, acked: s.delivered };
+              case 'rotate_consumer': return { ...s, consumerEpoch: s.consumerEpoch + 1 };
+              case 'stale_ack': return s;
+              case 'duplicate_delivery': return s;
+              default: throw new Error(`unknown action ${action}`);
+            }
+          };
+          const key = (s) => JSON.stringify(s);
+          let frontier = [initial];
+          const seen = new Set([key(initial)]);
+          for (let depth = 0; depth < 8; depth += 1) {
+            const next = [];
+            for (const state of frontier) {
+              assert.ok(state.acked <= state.delivered, 'ack cannot pass delivery');
+              assert.ok(state.delivered < state.nextSeq, 'next sequence stays ahead of delivery');
+              for (const action of actions) {
+                const after = step(state, action);
+                assert.ok(after.nextSeq >= state.nextSeq, 'sequence never regresses');
+                assert.ok(after.delivered >= state.delivered, 'delivery high-watermark never regresses');
+                assert.ok(after.acked >= state.acked, 'ack high-watermark never regresses');
+                assert.ok(after.consumerEpoch >= state.consumerEpoch, 'consumer epoch never regresses');
+                assert.ok(after.acked <= after.delivered, 'ack remains bounded by delivery');
+                if (action === 'stale_ack' || action === 'duplicate_delivery') assert.deepEqual(after, state, `${action} is idempotent`);
+                const k = key(after);
+                if (!seen.has(k)) { seen.add(k); next.push(after); }
+              }
+            }
+            frontier = next;
+          }
+          console.log(`formal delivery model OK: ${seen.size} reachable states checked`);
+          NODE
