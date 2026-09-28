@@ -1,0 +1,50 @@
+name: Rust storage confinement
+
+on:
+  pull_request:
+    paths:
+      - 'src/bin/storage_confinement_check.rs'
+      - '.github/workflows/storage-confinement-rust.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-storage-confinement-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bounded-model-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact candidate
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git diff --check
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
+
+      - name: Format checker
+        run: cargo +1.90.0 fmt --all -- --check
+
+      - name: Clippy checker
+        run: cargo +1.90.0 clippy --locked --bin storage_confinement_check -- -D warnings
+
+      - name: Unit-test checker
+        run: cargo +1.90.0 test --locked --bin storage_confinement_check
+
+      - name: Execute bounded model
+        run: cargo +1.90.0 run --quiet --locked --bin storage_confinement_check
