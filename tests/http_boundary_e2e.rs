@@ -82,8 +82,13 @@ fn request(address: SocketAddr, method: &str, path: &str) -> (u16, String) {
     stream.flush().expect("flush request");
 
     let mut bytes = Vec::new();
-    stream.read_to_end(&mut bytes).expect("bounded HTTP response");
-    assert!(bytes.len() <= 128 * 1024, "sidecar response exceeded test ceiling");
+    stream
+        .read_to_end(&mut bytes)
+        .expect("bounded HTTP response");
+    assert!(
+        bytes.len() <= 128 * 1024,
+        "sidecar response exceeded test ceiling"
+    );
     let response = String::from_utf8(bytes).expect("HTTP response UTF-8");
     let (status_line, _) = response.split_once("\r\n").expect("HTTP status line");
     let code = status_line
@@ -119,7 +124,11 @@ fn concurrent_clients_and_bad_routes_do_not_break_subsequent_health() {
     let workers: Vec<_> = (0..24)
         .map(|index| {
             thread::spawn(move || {
-                let path = if index % 2 == 0 { "/healthz" } else { "/readyz" };
+                let path = if index % 2 == 0 {
+                    "/healthz"
+                } else {
+                    "/readyz"
+                };
                 let (status, _) = request(address, "GET", path);
                 assert_eq!(status, 200, "concurrent {path}: {status}");
             })
@@ -130,7 +139,10 @@ fn concurrent_clients_and_bad_routes_do_not_break_subsequent_health() {
     }
 
     let (missing, _) = request(address, "GET", "/private-fixture-not-a-route");
-    assert_eq!(missing, 404, "a missing path must not serve a healthy payload");
+    assert_eq!(
+        missing, 404,
+        "a missing path must not serve a healthy payload"
+    );
     let (after, _) = request(address, "GET", "/healthz");
     assert_eq!(after, 200, "a rejected request broke the running sidecar");
 }
@@ -148,7 +160,10 @@ fn probe_commands_and_http_clients_agree_on_live_readiness() {
             .stderr(Stdio::null())
             .status()
             .expect("run sidecar probe subprocess");
-        assert!(status.success(), "{command} rejected an HTTP-healthy sidecar");
+        assert!(
+            status.success(),
+            "{command} rejected an HTTP-healthy sidecar"
+        );
         assert_eq!(request(server.address(), "GET", path).0, 200);
     }
 }
