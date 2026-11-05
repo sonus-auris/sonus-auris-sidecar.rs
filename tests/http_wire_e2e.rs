@@ -40,10 +40,17 @@ impl RunningSidecar {
                 return running;
             }
             assert!(
-                running.child.try_wait().expect("check sidecar exit").is_none(),
+                running
+                    .child
+                    .try_wait()
+                    .expect("check sidecar exit")
+                    .is_none(),
                 "sidecar exited before accepting connections"
             );
-            assert!(Instant::now() < deadline, "sidecar did not bind within deadline");
+            assert!(
+                Instant::now() < deadline,
+                "sidecar did not bind within deadline"
+            );
             thread::sleep(Duration::from_millis(20));
         }
     }
@@ -68,9 +75,13 @@ fn exchange(port: u16, request: &str) -> String {
     stream
         .set_write_timeout(Some(Duration::from_secs(3)))
         .expect("set write timeout");
-    stream.write_all(request.as_bytes()).expect("send HTTP request");
+    stream
+        .write_all(request.as_bytes())
+        .expect("send HTTP request");
     let mut response = String::new();
-    stream.read_to_string(&mut response).expect("read HTTP response");
+    stream
+        .read_to_string(&mut response)
+        .expect("read HTTP response");
     response
 }
 
@@ -83,13 +94,25 @@ fn real_binary_serves_health_readiness_and_metrics_with_hardened_responses() {
     let server = RunningSidecar::start();
     for path in ["/healthz", "/readyz"] {
         let response = server.exchange(&request(path));
-        assert!(response.starts_with("HTTP/1.1 200 OK"), "{path}: {response}");
-        assert!(response.contains("content-type: application/json"), "{path}");
+        assert!(
+            response.starts_with("HTTP/1.1 200 OK"),
+            "{path}: {response}"
+        );
+        assert!(
+            response.contains("content-type: application/json"),
+            "{path}"
+        );
         assert!(response.contains("\"ok\":true"), "{path}");
         assert!(response.contains("sonus-auris-sidecar"), "{path}");
         assert!(response.contains("cache-control: no-store"), "{path}");
-        assert!(response.contains("x-content-type-options: nosniff"), "{path}");
-        assert!(response.contains("content-security-policy: default-src 'none'"), "{path}");
+        assert!(
+            response.contains("x-content-type-options: nosniff"),
+            "{path}"
+        );
+        assert!(
+            response.contains("content-security-policy: default-src 'none'"),
+            "{path}"
+        );
     }
     let metrics = server.exchange(&request("/metrics"));
     assert!(metrics.starts_with("HTTP/1.1 200 OK"));
@@ -106,9 +129,18 @@ fn real_binary_serves_health_readiness_and_metrics_with_hardened_responses() {
 fn real_binary_rejects_method_body_traversal_and_header_abuse() {
     let server = RunningSidecar::start();
     let cases = [
-        ("POST /healthz HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\n{}", 400),
-        ("GET /healthz%2e%2e HTTP/1.1\r\nHost: localhost\r\n\r\n", 404),
-        ("GET /internal/retention/sweep HTTP/1.1\r\nHost: localhost\r\n\r\n", 404),
+        (
+            "POST /healthz HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\n{}",
+            400,
+        ),
+        (
+            "GET /healthz%2e%2e HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            404,
+        ),
+        (
+            "GET /internal/retention/sweep HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            404,
+        ),
         ("GET /healthz HTTP/1.1\r\n\r\n", 400),
         ("TRACE /healthz HTTP/1.1\r\nHost: localhost\r\n\r\n", 405),
         ("GET /healthz HTTP/2.0\r\nHost: localhost\r\n\r\n", 400),
@@ -138,7 +170,11 @@ fn concurrent_http_clients_get_independent_product_responses() {
     let threads: Vec<_> = (0..16)
         .map(|index| {
             thread::spawn(move || {
-                let path = if index % 2 == 0 { "/healthz" } else { "/readyz" };
+                let path = if index % 2 == 0 {
+                    "/healthz"
+                } else {
+                    "/readyz"
+                };
                 let response = exchange(port, &request(path));
                 assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
                 assert!(response.contains("\"ok\":true"));
@@ -182,8 +218,15 @@ fn probe_process_rejects_redirects_unready_services_and_malformed_http() {
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .output()
             .expect("invoke real kubelet probe command");
-        assert_eq!(output.status.code(), Some(1), "unhealthy probe must be nonzero");
-        assert!(output.stdout.is_empty(), "probes must never write to stdout");
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "unhealthy probe must be nonzero"
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "probes must never write to stdout"
+        );
         worker.join().expect("fake target should be contacted");
     }
 }
