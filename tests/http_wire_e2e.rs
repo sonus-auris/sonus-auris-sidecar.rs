@@ -196,7 +196,9 @@ fn fake_upstream(response: &'static [u8]) -> (u16, thread::JoinHandle<()>) {
             .set_read_timeout(Some(Duration::from_secs(3)))
             .expect("request timeout");
         let mut request = [0_u8; b"GET /healthz HTTP/1.1".len()];
-        socket.read_exact(&mut request).expect("read complete probe request line");
+        socket
+            .read_exact(&mut request)
+            .expect("read complete probe request line");
         assert_eq!(request.as_slice(), b"GET /healthz HTTP/1.1");
         socket.write_all(response).expect("send response");
     });
