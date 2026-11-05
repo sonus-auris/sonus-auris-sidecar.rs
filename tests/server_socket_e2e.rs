@@ -53,8 +53,13 @@ fn request(port: u16, path: &str) -> String {
     )
     .expect("write HTTP request");
     let mut received = String::new();
-    client.read_to_string(&mut received).expect("complete HTTP response");
-    assert!(received.contains("\r\n\r\n"), "expected complete HTTP headers");
+    client
+        .read_to_string(&mut received)
+        .expect("complete HTTP response");
+    assert!(
+        received.contains("\r\n\r\n"),
+        "expected complete HTTP headers"
+    );
     received
 }
 
