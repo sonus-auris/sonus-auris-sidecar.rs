@@ -36,7 +36,10 @@ fn start() -> (Sidecar, u16) {
         if TcpStream::connect(("127.0.0.1", port)).is_ok() {
             break;
         }
-        assert!(Instant::now() < deadline, "sidecar never bound its HTTP port");
+        assert!(
+            Instant::now() < deadline,
+            "sidecar never bound its HTTP port"
+        );
         thread::sleep(Duration::from_millis(25));
     }
     (Sidecar(child), port)
@@ -58,7 +61,9 @@ fn get(port: u16, path: &str) -> String {
     .expect("send complete HTTP request");
     stream.flush().unwrap();
     let mut result = Vec::new();
-    stream.read_to_end(&mut result).expect("read response to EOF");
+    stream
+        .read_to_end(&mut result)
+        .expect("read response to EOF");
     String::from_utf8(result).expect("HTTP response is UTF-8")
 }
 
@@ -89,7 +94,11 @@ fn concurrent_kubelet_clients_observe_consistent_success_over_real_sockets() {
     let workers = (0..16)
         .map(|index| {
             thread::spawn(move || {
-                let path = if index % 2 == 0 { "/healthz" } else { "/readyz" };
+                let path = if index % 2 == 0 {
+                    "/healthz"
+                } else {
+                    "/readyz"
+                };
                 let response = get(port, path);
                 assert_status(&response, 200);
             })
