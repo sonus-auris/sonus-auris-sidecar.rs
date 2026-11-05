@@ -32,10 +32,13 @@ fn start() -> RunningSidecar {
         .stderr(Stdio::null())
         .spawn()
         .expect("start real sidecar process");
+    // Immediately transfer the child into a Drop guard: every exit path, even
+    // a failing startup assertion, kills and reaps the subprocess.
+    let sidecar = RunningSidecar { child, port };
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline {
         if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            return RunningSidecar { child, port };
+            return sidecar;
         }
         thread::sleep(Duration::from_millis(25));
     }
